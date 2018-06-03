@@ -1,0 +1,8 @@
+''2018-06-03 19:17:24' - INFO - Rs422Func init'
+''2018-06-03 19:17:24' - INFO - Rs422Func init'
+''2018-06-03 19:17:24' - DEBUG - WaitCarComeTime:60'
+''2018-06-03 19:17:24' - DEBUG - WaitCarLeaveTime:180'
+''2018-06-03 19:17:24' - DEBUG - AfterCarLeaveTime:5'
+''2018-06-03 19:17:24' - INFO - Enter ScanPort'
+''2018-06-03 19:17:24' - ERROR - [Errno 2] could not open port /dev/ttyAMA0: [Errno 2] No such file or directory: '/dev/ttyAMA0''
+''2018-06-03 19:17:24' - ERROR - [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0''
