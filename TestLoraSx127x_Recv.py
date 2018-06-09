@@ -38,23 +38,23 @@ print('0x41--'+hex(lora.get_register(0x41)))
 print('0x42--'+hex(lora.get_register(0x42)))
 
 while True:
-    time.sleep(1)
-    print(GPIO.input(BOARD.DIO0))
-    lora.set_register(0x12,0xff)
-    print(GPIO.input(BOARD.DIO0))
-    flags = lora.get_irq_flags()
-    print(flags)
+    if GPIO.input(BOARD.DIO0)==1:
+        lora.set_register(0x12,0xff)#将GPIO清0
+#        print(GPIO.input(BOARD.DIO0))
+        flags = lora.get_irq_flags()
+#        print(flags)
 
-    rx_nb_bytes = lora.get_rx_nb_bytes()
- #   print(rx_nb_bytes)
+        rx_nb_bytes = lora.get_rx_nb_bytes()
+     #   print(rx_nb_bytes)
 
-    rx_addr = lora.get_fifo_rx_current_addr()
-#    print(rx_addr)
+        rx_addr = lora.get_fifo_rx_current_addr()
+    #    print(rx_addr)
+        payload = []
+        payload = lora.read_payload()
 
-    payload = lora.read_payload()
-
-    PrintList = []
-    for i in range(0,len(payload)):
-        PrintList.append(hex(payload[i]))
-    print(PrintList)
-
+        PrintList = []
+        for i in range(0,len(payload)):
+            PrintList.append(hex(payload[i]))
+        print(PrintList)
+    else:
+        time.sleep(0.1)
