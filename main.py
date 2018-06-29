@@ -13,6 +13,8 @@ import logging.config
 #from gpioctr import GpioCtr
 from os import path
 
+from LoraServer import LoraServer
+
 log_file_path = path.join(path.dirname(path.abspath(__file__)), 'logging.config')
 logging.config.fileConfig(log_file_path)
 MyLog = logging.getLogger('ws_debug_log')         #log data
@@ -122,13 +124,13 @@ class Main(QWidget,Ui_Form):
     def btnLockUpClicked(self):
         if self.handlAllTag==False:
             addr = self.comboBox.currentText()
-            cmd = '04'
+            cmd = '02'
             self.signal_LockCMD.emit(cmd+addr)
         else:
             row_count = self.tableWidget.rowCount()
             for row_index in range(row_count):
                 addr = self.tableWidget.item(row_index, 0).text()
-                cmd = '04'
+                cmd = '02'
                 self.signal_LockCMD.emit(cmd + addr)
                 time.sleep(1)
         pass
@@ -136,13 +138,13 @@ class Main(QWidget,Ui_Form):
     def btnLockDownClicked(self):
         if self.handlAllTag==False:
             addr = self.comboBox.currentText()
-            cmd = '05'
+            cmd = '03'
             self.signal_LockCMD.emit(cmd+addr)
         else:
             row_count = self.tableWidget.rowCount()
             for row_index in range(row_count):
                 addr = self.tableWidget.item(row_index, 0).text()
-                cmd = '05'
+                cmd = '03'
                 self.signal_LockCMD.emit(cmd + addr)
                 time.sleep(1)
         pass
@@ -376,17 +378,24 @@ if __name__ == '__main__':
     ex=Main()
     ex.show()
 
+    loraServer = LoraServer()
+    loraServer.run()
+    loraServer.signal_Lock.connect(ex.ShowLock)
+    loraServer.signal_newLock.connect(ex.ShowNewLock)
+
+    ex.signal_LockCMD.connect(loraServer.LockCMDExcute2)
+
   #  gpio = GpioCtr()
 
-    rs422 = RS422Func()
-    rs422.ScanPort()
+  #  rs422 = RS422Func()
+  #  rs422.ScanPort()
 
     webservice = WebServer()
-    webservice.signal.connect(rs422.LockCMDExcute)
+  #  webservice.signal.connect(rs422.LockCMDExcute)
 
-    ex.signal_LockCMD.connect(rs422.LockCMDExcute)
+  #  ex.signal_LockCMD.connect(rs422.LockCMDExcute)
 
-    rs422.signal_Lock.connect(ex.ShowLock)
-    rs422.signal_newLock.connect(ex.ShowNewLock)
+  #  rs422.signal_Lock.connect(ex.ShowLock)
+  #  rs422.signal_newLock.connect(ex.ShowNewLock)
 
     sys.exit(app.exec_())

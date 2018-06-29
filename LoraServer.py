@@ -22,20 +22,19 @@ from SX127x.board_config import BOARD
 import time
 import RPi.GPIO as GPIO
 
-
 import logging
 MyLog = logging.getLogger('ws_debug_log')       #log data
 MajorLog = logging.getLogger('ws_error_log')      #log error
 
-class CanServer(QThread):
+class LoraServer(QThread):
     signal = pyqtSignal(str)
 
     signal_newLock = pyqtSignal(MyLock)
     signal_Lock = pyqtSignal(MyLock)
 
     def __init__(self):
-        super(CanServer,self).__init__()
-        MyLog.debug('CanServer in')
+        super(LoraServer,self).__init__()
+        MyLog.debug('LoraServer in')
 
         BOARD.setup()
 
@@ -49,7 +48,7 @@ class CanServer(QThread):
 
         try:
             cf = configparser.ConfigParser()
-            cf.read(path.expandvars('$HOME') + '/Downloads/WWTFrontServer_SPI/Configuration.ini', encoding="utf-8-sig")
+            cf.read(path.expandvars('$HOME') + '/Downloads/WWTFrontServer_Lora/Configuration.ini', encoding="utf-8-sig")
 
             self.WaitCarComeTime = cf.getint("StartLoad", "WaitCarComeTime")
             self.WaitCarLeaveTime = cf.getint("StartLoad", "WaitCarLeaveTime")
@@ -78,6 +77,7 @@ class CanServer(QThread):
         print("LoraServer start init----")
 
         lora.set_mode(MODE.STDBY)
+        lora.set_dio_mapping([0,0,0,0,0,0])
         print(lora.get_freq())
         lora.set_freq(478.0)
         lora.set_coding_rate(CODING_RATE.CR4_6)
@@ -111,8 +111,14 @@ class CanServer(QThread):
         print("LoraServer finish init----")
 
     def LoraServer_write(self,payload):
+        self.lora.set_mode(MODE.STDBY)
+        self.lora.set_dio_mapping([1, 0, 0, 0, 0, 0])
+
+        self.lora.set_pa_config(pa_select=1)
+
         self.lora.clear_irq_flags(TxDone=1)
-        self.lora.set_dio_mapping([0] * 6)
+
+
 
 #        payload1 = [0xEB, 0x90, 0x14, 0x0B, 0xFF, 0xFF, 0xFF, 0xFF, 0x05, 0x10, 0x02, 0xFF, 0x00, 0x29, 0xC1]
 #        payload2 = [0xEB, 0x90, 0x14, 0x0B, 0xFF, 0xFF, 0xFF, 0xFF, 0x05, 0x10, 0x03, 0xFF, 0x00, 0x29, 0xC0]
@@ -120,6 +126,10 @@ class CanServer(QThread):
 
         self.lora.write_payload(payload)
         self.lora.set_mode(MODE.TX)
+
+        self.lora.set_mode(MODE.STDBY)
+        self.lora.set_dio_mapping([0,0,0,0,0,0])
+
         self.lora.set_mode(MODE.RXCONT)
 
 
@@ -211,20 +221,30 @@ class CanServer(QThread):
         MyLog.debug("LoraServer run ")
         self.ThreadTag = True
 
-        t = threading.Thread(target=ServerOn,args=(self.spi,self))
+        t = threading.Thread(target=ServerOn,args=(self,))
         t.start()
 
 
 
     def LockUp(self, addr):
-        buf = [int(addr[0:2],16),int(addr[2:4],16),int(addr[4:6],16),int(addr[6:8],16),2]
-        self.mcp2515_write(buf)
+        buf = [0xEB, 0x90, 0x14, 0x0A,
+               int(addr[0:2],16),int(addr[2:4],16),int(addr[4:6],16),int(addr[6:8],16),
+               0x05, 0x10, 0x02, 0xFF, 0x00, 0x00]
+
+        print(buf)
+
+        self.LoraServer_write(buf)
+
         MyLog.info("LockUp"+addr)
 
 
     def LockDown(self, addr):
-        buf = [int(addr[0:2],16),int(addr[2:4],16),int(addr[4:6],16),int(addr[6:8],16),3]
-        self.mcp2515_write(buf)
+        buf = [0xEB, 0x90, 0x14, 0x0A,
+               int(addr[0:2],16),int(addr[2:4],16),int(addr[4:6],16),int(addr[6:8],16),
+               0x05, 0x10, 0x03, 0xFF, 0x00, 0x00]
+
+        self.LoraServer_write(buf)
+
         MyLog.info('LockDown:' + addr)
 
         for lock in SharedMemory.LockList:
@@ -260,14 +280,16 @@ class CanServer(QThread):
             pass
 
     def LockCMDExcute2(self, str):
-        MyLog.debug("触发Lockcmdexcute2 本地点击")
+        MyLog.debug("触发Lockcmdexcute2 本地点击"+str)
         if len(str) == 10:
-            addr = str[0:8]
-            cmd = str[8:10]
+            addr = str[2:10]
+            cmd = str[0:2]
             if cmd == '02':
                 self.LockUp(addr)
+                MyLog.info("本地点击升锁！")
             elif cmd == '03':
                 self.LockDown(addr)
+                MyLog.info("本地点击降锁！")
             elif cmd == '04':
                 buf = [int(addr[0:2], 16), int(addr[2:4], 16), int(addr[4:6], 16), int(addr[6:8], 16), 4]
                 self.mcp2515_write(buf)
@@ -289,28 +311,27 @@ class CanServer(QThread):
             pass
 
 
-def ServerOn(SPI,self):
+def ServerOn(self):
     MyLog.info('LoraServer On through SPI Port!!')
     while self.ThreadTag:
         if GPIO.input(BOARD.DIO0) == 1:
             data = self.LoraServer_read()
             if data != None and len(data) > 0:
                 if data[0]==0xeb and data[1]==0x90:
-                    strid = data[8:16]
-
+                    strid = hex(data[4])[2:].zfill(2)+hex(data[5])[2:].zfill(2)+hex(data[6])[2:].zfill(2)+hex(data[7])[2:].zfill(2)
+                    #eb 90 10 0a d4 26 37 42 41 00 00 20 63 28
                     if strid not in stridList:
                         stridList.append(strid)
                         print('Not in the list and Add on')
 
                         newLock = MyLock()
-                        newLock.addr = data[8:16]
+                        newLock.addr = strid
 
-                        tempstatus = bin(int(data[16:18], 16))[2:].zfill(8)
-                        newLock.arm = tempstatus[-4:-2]
-                        newLock.car = data[18:20]
-                        newLock.reservd4 = data[20:22]
-                        newLock.sensor = data[22:24]
-                        newLock.machine = data[22:24]
+                        newLock.arm = data[8]
+                        newLock.car = data[9]
+                        newLock.reservd4 = data[10]
+                        newLock.sensor = data[11]
+                        newLock.machine = data[11]
 
                         SharedMemory.LockList.append(newLock)
                         self.signal_newLock.emit(newLock)
@@ -320,26 +341,24 @@ def ServerOn(SPI,self):
                         for lock in SharedMemory.LockList:
                             if lock.addr == strid:
 
-                                tempstatus = bin(int(data[16:18], 16))[2:].zfill(8)
-                                print(tempstatus)
-                                if lock.arm != tempstatus[-4:-2]:
-                                    lock.arm = tempstatus[-4:-2]
+                                if lock.arm != data[8]:
+                                    lock.arm = data[8]
                                     lock.StatusChanged = True
 
-                                if lock.car != data[10:12]:
-                                    lock.car = data[10:12]
+                                if lock.car != data[9]:
+                                    lock.car = data[9]
                                     lock.StatusChanged = True
 
-                                if lock.reservd4 != data[12:14]:
-                                    lock.reservd4 = data[12:14]
+                                if lock.reservd4 != data[10]:
+                                    lock.reservd4 = data[10]
                                     lock.StatusChanged = True
 
-                                if lock.sensor != data[14:16]:
-                                    lock.sensor = data[14:16]
+                                if lock.sensor != data[11]:
+                                    lock.sensor = data[11]
                                     lock.StatusChanged = True
 
-                                if lock.machine != data[14:16]:
-                                    lock.machine = data[14:16]
+                                if lock.machine != data[11]:
+                                    lock.machine = data[11]
                                     lock.StatusChanged = True
 
                                 self.signal_Lock.emit(lock)
